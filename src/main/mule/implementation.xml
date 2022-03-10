@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mongo/current/mule-mongo.xsd">
+	<flow name="getVehicleData" doc:id="a9319b1a-5555-4f03-83d5-86e6c04bba90" >
+		<http:listener doc:name="Listener" doc:id="dccef9c5-57c0-47bd-9ac9-a5b3b821dbc7" path="/vehicle_data" config-ref="HTTP_Listener_config1"/>
+		<logger level="INFO" doc:name="Logger" doc:id="d5b8c8cd-4caa-4c2c-acdc-9cc41e7bd4a2" />
+		<ee:transform doc:name="Transform Message" doc:id="ba375631-3f0f-4c65-a6b0-5631a2247e0b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from modules::vehicle
+---
+{
+	"Id" : getCar(car, payload."parts"."model"."content")
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<salesforce:query doc:name="Query" doc:id="e26e5da0-e58c-4d2a-b640-6ae82ad0774b" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[SELECT FIELDS(ALL) FROM vehicle__c WHERE Id = :id LIMIT 200]]></salesforce:salesforce-query>
+			<salesforce:parameters ><![CDATA[#[{
+	id : "'" ++ payload.Id ++ "'"
+}]]]></salesforce:parameters>
+		</salesforce:query>
+		<ee:transform doc:name="Transform Message" doc:id="b7e61fb7-c0ed-442e-a68b-76de888e17cb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="getDealerData" doc:id="58665285-720e-464b-9261-c105196eb188" >
+		<http:listener doc:name="Listener" doc:id="8b5b76bc-f32b-45ac-93f9-8964c6b5b0f6" path="/dealer_data" config-ref="HTTP_Listener_config1"/>
+		<logger level="INFO" doc:name="Logger" doc:id="3042747c-5405-4188-bde7-d5e06a14ea9c" />
+		<ee:transform doc:name="Transform Message" doc:id="da730ded-42ef-4f07-ab96-051a23e1ade4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from modules::postcode
+---
+{
+	"Id" : getDealer(post, payload."parts"."PostalCode"."content")
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<salesforce:query doc:name="Query" doc:id="2b5e1b4f-d5db-4a93-879d-cbff651740d9" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[SELECT FIELDS(ALL) FROM Contact WHERE Id = :id LIMIT 200]]></salesforce:salesforce-query>
+			<salesforce:parameters ><![CDATA[#[{
+	id : "'" ++ payload."Id" ++ "'"
+}]]]></salesforce:parameters>
+		</salesforce:query>
+		<ee:transform doc:name="Transform Message" doc:id="8cb173f0-9ac2-4761-a4f0-f519f97dedbb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="2a40722b-1f8d-4790-8785-e13b1a48e674" />
+	</flow>
+	<flow name="salesforce_insert" doc:id="8cba066c-14b1-4da3-8e4d-b80b60dfadc9" >
+		<async doc:name="Async" doc:id="6848d2de-c652-4e07-9833-5970f9cab461" >
+			<ee:transform doc:name="formData-to-variable(lead_data)" doc:id="5c7e2b97-8d69-40ea-b809-5eb440f1f203">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="lead_data"><![CDATA[%dw 2.0
+output application/json
+---
+payload ++ {
+"processed time": now() as String {format:"dd:MM:yyyy H:m:s"} 
+
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<ee:transform doc:name="staging to db" doc:id="72739ec2-7a0f-4d32-b085-31b52a9cf69b" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+import * from modules::postcode
+import * from modules::vehicle
+output application/json
+---
+{ 
+    salutation : vars.lead_data."parts"."salutation"."content",	
+	firstname : vars.lead_data."parts"."firstname"."content",
+	lastname : vars.lead_data."parts"."lastname"."content",
+	email : vars.lead_data."parts"."email"."content",
+	phone : vars.lead_data."parts"."phone"."content",
+	company : "MG",
+	street : vars.lead_data."parts"."street"."content",
+	city : vars.lead_data."parts"."city"."content",
+	state : vars.lead_data."parts"."state"."content",
+	postcode : vars.lead_data."parts"."postcode"."content",
+	country : vars.lead_data."parts"."country"."content",
+	message : vars.lead_data."parts"."message"."content",
+	"Dealer_id" : getDealer(post, vars.lead_data."parts"."postcode"."content"),
+	service_type	 : vars.lead_data."parts"."service_type"."content",
+    "vehicle_model" : vars.lead_data."parts"."vehicle_model"."content",
+    vehicle_id : getCar(car, vars.lead_data."parts"."vehicle_model"."content"),
+    vehicle_title: vars.lead_data."parts"."vehicle_title"."content",
+    fuel: vars.lead_data."parts"."fuel"."content",
+    vehicle_type: vars.lead_data."parts"."vehicle_type"."content",
+    processed_time: vars.lead_data."processed time",
+    status: "new"
+	}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<mongo:insert-document collectionName='#[payload."company"]' doc:name="insert to staging db" doc:id="31c5fbe0-4072-40ec-b7fd-9903154f4648" config-ref="MongoDB_Config">
+				</mongo:insert-document>
+			<logger level="INFO" doc:name="Logger" doc:id="6d67857b-a020-46e2-9f69-4a5cc160fb49" />
+		</async>
+		<ee:transform doc:name="Response to customer" doc:id="bf5410a5-a835-405a-b3f8-28064f65ddd1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message":"thank you our executive will contact you soon.."
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="process" doc:id="316bf30f-f51d-4ca1-ba18-a11bbaeef3c3" >
+		<scheduler doc:name="Scheduler" doc:id="5cfc409f-ad02-4c36-a03d-213d0f7c159d" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="10" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<mongo:find-documents doc:name="Find documents" doc:id="12881f5e-5201-4d2e-99fa-a5b7e879589c" config-ref="MongoDB_Config" collectionName="MG" fields="salutation, firstname, lastname, email, phone, street, city, state, postcode, country, message, service_type, vehicle_model, vehicle_title, fuel, vehicle_type, processed_time, status, Dealer_id. vehicle_id">
+			<mongo:query ><![CDATA[{ status: 'new' }]]></mongo:query>
+		</mongo:find-documents>
+		<logger level="INFO" doc:name="Logger" doc:id="f1086b7f-7569-49ec-999a-ab9081dffb04" message="#[payload]"/>
+		<foreach doc:name="For Each" doc:id="744783d3-7462-475d-aa34-1ddc7aed20be" >
+			<ee:transform doc:name="Transform Message" doc:id="8364ca41-a2f1-44e6-90a1-885fbfedcbd2" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="leaddata" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<try doc:name="Try" doc:id="0878a336-e740-4610-ae4f-26e4a506db0f" >
+				<http:request method="POST" doc:name="checking-contact-to-systemAPI" doc:id="263349fc-033b-41d1-a78e-e3a085aeb9c9" config-ref="HTTP_Request_configuration" path="${request.contact_path}">
+			<http:body><![CDATA[#[vars.leaddata]]]></http:body>
+		</http:request>
+				<error-handler >
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="fe85a89d-b323-46c5-8336-9ebbd98069b6" type="ANY">
+						<ee:transform doc:name="Transform Message" doc:id="1ed92e8e-369c-46e1-b49a-c08e1ef5cd4f" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"error_response": "failed"
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<logger level="INFO" doc:name="Logger" doc:id="718319bf-5716-498a-ab4e-fc97c4ce4aff" />
+			<ee:transform doc:name="contact_info (status)" doc:id="a1c04d4e-f116-499a-b7eb-23018ccda16b">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="contact_info"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"id" : payload.id,
+	"status" : if(payload.status == true ) "new contact"  else "existing contact",
+	error: if (payload."error_response" == "failed") "couldnt able to connect to system api (contact_check)" else "success"
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<try doc:name="Try" doc:id="4efa1e63-300c-430e-b30f-2ee38f15956e" >
+				<http:request method="POST" doc:name="checking-lead-to-systemAPI" doc:id="f2ad2c5a-5cc6-4004-ba44-efca86a9f366" config-ref="HTTP_Request_configuration" path="${request.lead_path}">
+			<http:body><![CDATA[#[vars.leaddata]]]></http:body>
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"contactId" : vars.contact_info.id
+}]]]></http:query-params>
+		</http:request>
+				<error-handler >
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b612319e-e546-4bf1-b430-f5c59914f3aa" type="ANY">
+						<ee:transform doc:name="Transform Message" doc:id="fa494856-25a4-4112-b870-408904150757" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"error_response": "failed"
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<logger level="INFO" doc:name="Logger" doc:id="c1196d9a-4204-4d85-8df9-bb0db5dd8d77" />
+			<ee:transform doc:name="lead_info(status)" doc:id="676a196c-15b8-4935-97d9-3d9da108bc47">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="lead_info"><![CDATA[%dw 2.0
+output application/json
+---
+{	
+	"id" : payload.id,
+	"status" : if(payload.status == true ) "new lead"  else if (vars.contact_info.status == "new contact") "new lead" else "existing lead",
+	error: if (payload."error_response" == "failed") "couldnt able to connect to system api (lead_check)" else "success"
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<ee:transform doc:name="mongodb_input" doc:id="b4f5ec9e-94b0-485d-8719-e7e636ec4402">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{ 
+	"_id": vars."leaddata"."_id",
+    salutation : vars."leaddata"."salutation",	
+	firstname : vars."leaddata"."firstname",
+	lastname : vars."leaddata"."lastname",
+	email : vars."leaddata"."email",
+	phone : vars."leaddata"."phone",
+	company : "MG",
+	street : vars."leaddata"."street",
+	city : vars."leaddata"."city",
+	state : vars."leaddata"."state",
+	postcode : vars."leaddata"."postcode",
+	country : vars."leaddata"."country",
+	message : vars."leaddata"."message",
+	"Dealer_id" : vars."leaddata"."Dealer_id",
+	service_type	 : vars."leaddata"."service_type",
+    "vehicle_model" : vars."leaddata"."vehicle_model",
+    vehicle_id : vars."leaddata".vehicle_id,
+    vehicle_title: vars."leaddata"."vehicle_title",
+    fuel: vars."leaddata"."fuel",
+    vehicle_type: vars."leaddata"."vehicle_type",
+    processed_time: vars."leaddata"."processed_time",
+    status: if (vars."contact_info"."error" == "success" and vars."lead_info"."error" == "success") "finished" else "new" ,
+    lead_status: vars."lead_info"."status" ++ " " ++ vars.lead_info.error,
+    contact_status: vars."contact_info"."status" ++ " " ++ vars.contact_info.error
+	}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+			</ee:variables>
+		</ee:transform>
+			<mongo:update-documents collectionName="MG" doc:name="Update documents" doc:id="86dafc5a-fcbf-4a08-ac32-003c34f6feba" config-ref="MongoDB_Config" upsert="true">
+			<mongo:query><![CDATA[#[{
+ "_id": payload."_id" 
+}]]]></mongo:query>
+		</mongo:update-documents>
+		</foreach>
+	</flow>
+</mule>
