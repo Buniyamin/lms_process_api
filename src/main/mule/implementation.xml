@@ -68,8 +68,7 @@ payload]]></ee:set-payload>
 		<logger level="INFO" doc:name="Logger" doc:id="2a40722b-1f8d-4790-8785-e13b1a48e674" />
 	</flow>
 	<flow name="salesforce_insert" doc:id="8cba066c-14b1-4da3-8e4d-b80b60dfadc9" >
-		<async doc:name="Async" doc:id="6848d2de-c652-4e07-9833-5970f9cab461" >
-			<ee:transform doc:name="formData-to-variable(lead_data)" doc:id="5c7e2b97-8d69-40ea-b809-5eb440f1f203">
+		<ee:transform doc:name="formData-to-variable(lead_data)" doc:id="5c7e2b97-8d69-40ea-b809-5eb440f1f203">
 			<ee:message>
 			</ee:message>
 			<ee:variables>
@@ -82,9 +81,20 @@ payload ++ {
 }]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-			<ee:transform doc:name="staging to db" doc:id="72739ec2-7a0f-4d32-b085-31b52a9cf69b" >
-				<ee:message >
-					<ee:set-payload ><![CDATA[%dw 2.0
+		<ee:transform doc:name="staging to db" doc:id="72739ec2-7a0f-4d32-b085-31b52a9cf69b">
+				<ee:message>
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	email : vars.lead_data."parts"."email"."content",
+	phone : vars.lead_data."parts"."phone"."content",
+	service_type: vars.lead_data."parts"."service_type"."content",
+	vehicle_model : vars.lead_data."parts"."vehicle_model"."content",
+}]]></ee:set-payload>
+				</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="stage" ><![CDATA[%dw 2.0
 import * from modules::postcode
 import * from modules::vehicle
 output application/json
@@ -111,23 +121,53 @@ output application/json
     vehicle_type: vars.lead_data."parts"."vehicle_type"."content",
     processed_time: vars.lead_data."processed time",
     status: "new"
-	}]]></ee:set-payload>
-				</ee:message>
+	}]]></ee:set-variable>
+			</ee:variables>
 			</ee:transform>
-			<mongo:insert-document collectionName='#[payload."company"]' doc:name="insert to staging db" doc:id="31c5fbe0-4072-40ec-b7fd-9903154f4648" config-ref="MongoDB_Config">
+		<mongo:find-documents doc:name="Find documents" doc:id="dc503c1c-4d4c-42ca-a440-09dd7e3f9281" config-ref="MongoDB_Config" collectionName="MG" fields="firstname">
+			<mongo:query ><![CDATA[#[payload]]]></mongo:query>
+		</mongo:find-documents>
+		<choice doc:name="Choice" doc:id="1b387f79-b3d8-47c4-b4ff-7cd2606b81d8" >
+			<when expression='#[payload."firstname" == null]'>
+				<mongo:insert-document collectionName='#[vars."stage"."company"]' doc:name="insert to staging db" doc:id="31c5fbe0-4072-40ec-b7fd-9903154f4648" config-ref="MongoDB_Config">
+			<mongo:document><![CDATA[#[vars."stage"]]]></mongo:document>
 				</mongo:insert-document>
-			<logger level="INFO" doc:name="Logger" doc:id="6d67857b-a020-46e2-9f69-4a5cc160fb49" />
-		</async>
-		<ee:transform doc:name="Response to customer" doc:id="bf5410a5-a835-405a-b3f8-28064f65ddd1" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
+				<ee:transform doc:name="Response to customer" doc:id="bf5410a5-a835-405a-b3f8-28064f65ddd1">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
-	"message":"thank you our executive will contact you soon.."
+	"message" : "thank you your request acknowledged"
 }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="2355a382-d1d9-466d-b8f8-d0a83c643cb7" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"your request exist"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="2dd06719-d0e6-4376-9d98-30035e1a63ff" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="575f0bf2-9479-40e4-843a-21c9480ebb75" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "failed to insert to database"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
 	<flow name="process" doc:id="316bf30f-f51d-4ca1-ba18-a11bbaeef3c3" >
 		<scheduler doc:name="Scheduler" doc:id="5cfc409f-ad02-4c36-a03d-213d0f7c159d" >
@@ -154,6 +194,44 @@ payload]]></ee:set-variable>
 				<http:request method="POST" doc:name="checking-contact-to-systemAPI" doc:id="263349fc-033b-41d1-a78e-e3a085aeb9c9" config-ref="HTTP_Request_configuration" path="${request.contact_path}">
 			<http:body><![CDATA[#[vars.leaddata]]]></http:body>
 		</http:request>
+				<logger level="INFO" doc:name="Logger" doc:id="718319bf-5716-498a-ab4e-fc97c4ce4aff" />
+				<ee:transform doc:name="contact_info (status)" doc:id="a1c04d4e-f116-499a-b7eb-23018ccda16b">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="contact_info"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"id" : payload.id,
+	"status" : if(payload.status == true ) "new contact"  else "existing contact",
+	error: if (payload."error_response" == "failed") "couldnt able to connect to system api (contact_check)" else "success"
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+				<http:request method="POST" doc:name="checking-lead-to-systemAPI" doc:id="f2ad2c5a-5cc6-4004-ba44-efca86a9f366" config-ref="HTTP_Request_configuration" path="${request.lead_path}">
+			<http:body><![CDATA[#[vars.leaddata]]]></http:body>
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"contactId" : vars.contact_info.id
+}]]]></http:query-params>
+		</http:request>
+				<logger level="INFO" doc:name="Logger" doc:id="c1196d9a-4204-4d85-8df9-bb0db5dd8d77" />
+				<ee:transform doc:name="lead_info(status)" doc:id="676a196c-15b8-4935-97d9-3d9da108bc47">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="lead_info"><![CDATA[%dw 2.0
+output application/json
+---
+{	
+	"id" : payload.id,
+	"status" : if(payload.status == true ) "new lead"  else if (vars.contact_info.status == "new contact") "new lead" else "existing lead",
+	error: if (payload."error_response" == "failed") "couldnt able to connect to system api (lead_check)" else "success"
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
 				<error-handler >
 					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="fe85a89d-b323-46c5-8336-9ebbd98069b6" type="ANY">
 						<ee:transform doc:name="Transform Message" doc:id="1ed92e8e-369c-46e1-b49a-c08e1ef5cd4f" >
@@ -169,60 +247,6 @@ output application/json
 					</on-error-continue>
 				</error-handler>
 			</try>
-			<logger level="INFO" doc:name="Logger" doc:id="718319bf-5716-498a-ab4e-fc97c4ce4aff" />
-			<ee:transform doc:name="contact_info (status)" doc:id="a1c04d4e-f116-499a-b7eb-23018ccda16b">
-			<ee:message>
-			</ee:message>
-			<ee:variables>
-				<ee:set-variable variableName="contact_info"><![CDATA[%dw 2.0
-output application/json
----
-{
-	"id" : payload.id,
-	"status" : if(payload.status == true ) "new contact"  else "existing contact",
-	error: if (payload."error_response" == "failed") "couldnt able to connect to system api (contact_check)" else "success"
-}]]></ee:set-variable>
-			</ee:variables>
-		</ee:transform>
-			<try doc:name="Try" doc:id="4efa1e63-300c-430e-b30f-2ee38f15956e" >
-				<http:request method="POST" doc:name="checking-lead-to-systemAPI" doc:id="f2ad2c5a-5cc6-4004-ba44-efca86a9f366" config-ref="HTTP_Request_configuration" path="${request.lead_path}">
-			<http:body><![CDATA[#[vars.leaddata]]]></http:body>
-			<http:query-params><![CDATA[#[output application/java
----
-{
-	"contactId" : vars.contact_info.id
-}]]]></http:query-params>
-		</http:request>
-				<error-handler >
-					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b612319e-e546-4bf1-b430-f5c59914f3aa" type="ANY">
-						<ee:transform doc:name="Transform Message" doc:id="fa494856-25a4-4112-b870-408904150757" >
-							<ee:message >
-								<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	"error_response": "failed"
-}]]></ee:set-payload>
-							</ee:message>
-						</ee:transform>
-					</on-error-continue>
-				</error-handler>
-			</try>
-			<logger level="INFO" doc:name="Logger" doc:id="c1196d9a-4204-4d85-8df9-bb0db5dd8d77" />
-			<ee:transform doc:name="lead_info(status)" doc:id="676a196c-15b8-4935-97d9-3d9da108bc47">
-			<ee:message>
-			</ee:message>
-			<ee:variables>
-				<ee:set-variable variableName="lead_info"><![CDATA[%dw 2.0
-output application/json
----
-{	
-	"id" : payload.id,
-	"status" : if(payload.status == true ) "new lead"  else if (vars.contact_info.status == "new contact") "new lead" else "existing lead",
-	error: if (payload."error_response" == "failed") "couldnt able to connect to system api (lead_check)" else "success"
-}]]></ee:set-variable>
-			</ee:variables>
-		</ee:transform>
 			<ee:transform doc:name="mongodb_input" doc:id="b4f5ec9e-94b0-485d-8719-e7e636ec4402">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
@@ -242,17 +266,16 @@ output application/json
 	postcode : vars."leaddata"."postcode",
 	country : vars."leaddata"."country",
 	message : vars."leaddata"."message",
-	"Dealer_id" : vars."leaddata"."Dealer_id",
 	service_type	 : vars."leaddata"."service_type",
     "vehicle_model" : vars."leaddata"."vehicle_model",
-    vehicle_id : vars."leaddata".vehicle_id,
     vehicle_title: vars."leaddata"."vehicle_title",
     fuel: vars."leaddata"."fuel",
     vehicle_type: vars."leaddata"."vehicle_type",
     processed_time: vars."leaddata"."processed_time",
-    status: if (vars."contact_info"."error" == "success" and vars."lead_info"."error" == "success") "finished" else "new" ,
-    lead_status: vars."lead_info"."status" ++ " " ++ vars.lead_info.error,
-    contact_status: vars."contact_info"."status" ++ " " ++ vars.contact_info.error
+    error: if (payload."error_response" == "failed") "couldnt able to connect to system api" else "success" ,
+    lead_status: if (payload."error_response" == "failed") "couldnt able to create lead" else vars."lead_info".status,
+    contact_status: if (payload."error_response" == "failed") "coudnt able to createcontact" else vars."contact_info"."status",
+    status: if (payload."error_response" == "failed") "new" else "processed"
 	}]]></ee:set-payload>
 			</ee:message>
 			<ee:variables>
