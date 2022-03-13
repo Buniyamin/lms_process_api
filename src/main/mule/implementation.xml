@@ -76,7 +76,7 @@ payload]]></ee:set-payload>
 output application/json
 ---
 payload ++ {
-"processed time": now() as String {format:"dd:MM:yyyy H:m:s"} 
+"processed time": now() as String {format:"dd:MM:yyyy HH:mm:ss"} 
 
 }]]></ee:set-variable>
 			</ee:variables>
