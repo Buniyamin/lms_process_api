@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo"
-	xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite"
-	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:cloudhub="http://www.mulesoft.org/schema/mule/cloudhub" xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+	xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo"
+	xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
 http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd
 http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mongo/current/mule-mongo.xsd
-http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd">
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/cloudhub http://www.mulesoft.org/schema/mule/cloudhub/current/mule-cloudhub.xsd">
 	<configuration-properties doc:name="Configuration properties" doc:id="a676f003-e52a-4e93-8d2e-a83e7d10d13b" file="${env}.yaml" />
 	<http:listener-config name="HTTP_Listener_config1" doc:name="HTTP Listener config" doc:id="17a06c69-6137-4811-a1b6-a64f02553a0b" >
 		<http:listener-connection host="0.0.0.0" port="${https.port}" protocol="HTTPS">
@@ -30,4 +31,7 @@ http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/
 		<mongo:connection-string-connection connectionString="${mongodb.connection_string}" />
 	</mongo:config>
 	<global-property doc:name="Global Property" doc:id="7bed9b77-8fc3-4076-8ff3-47243872f51c" name="env" value="dev" />
+	<cloudhub:config name="CloudHub_Config" doc:name="CloudHub Config" doc:id="51de764e-bfae-4c5a-9bd5-c37e015ce432" >
+		<cloudhub:connection username="${cloudhub.username}" password="${cloudhub.password}" environment="f386441d-ed3d-4637-a41e-7c443d3255cb" />
+	</cloudhub:config>
 </mule>
