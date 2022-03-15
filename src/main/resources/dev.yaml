@@ -15,6 +15,12 @@ request:
   host: "salesforcesystem-1dev.us-e2.cloudhub.io"
   contact_path: "/api/contactcheck"
   lead_path: "/api/leadcheck" 
-  
+
+cloudhub:
+ username: "LMS-1"
+ password: "Lms@1234"
+ envi: "Dev"
+ domain: "salesforceprocess-1dev"
+ 
 mongodb:
   connection_string: "mongodb+srv://buniyaminlms:lmsbuniyamin@cluster0.9xxrr.mongodb.net/myFirstDatabase?retryWrites=true&w=majority&maxIdleTimeMS=5000&authSource=admin" 
